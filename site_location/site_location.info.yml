@@ -1,0 +1,8 @@
+name: 'Site location'
+type: module
+description: 'Module provide admin to configure: location, timezone and also able to view current time and location block.'
+core: 8.x
+package: 'Custom'
+dependencies:
+  - block
+configure: site_location.site_location_form

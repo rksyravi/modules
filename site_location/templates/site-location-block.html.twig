@@ -1,0 +1,21 @@
+{#
+/**
+* @file
+* Default theme implementation to display a block.
+*
+* @see template_preprocess_block()
+*
+* @ingroup themeable
+*/
+#}
+{% set classes = [
+    'clear-both',
+] %}
+<div{{ attributes.addClass(classes) }}>
+  {% if content is not empty %}
+    <p><b>Country: </b>{{ content.country }}</p>
+    <p><b>City: </b>{{ content.city }}</p>
+    <p><b>Timezone: </b>{{ content.timezone }}</p>
+    <p><b>Current date and time: </b>{{ content.current_datetime }}</p>
+  {% endif %}
+</div>

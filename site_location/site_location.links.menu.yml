@@ -1,0 +1,6 @@
+site_location.site_location_form:
+  title: 'Site location configuration'
+  route_name: site_location.site_location_form
+  description: 'Configure country, city and timezone.'
+  parent: system.admin_config_ui
+  weight: 99

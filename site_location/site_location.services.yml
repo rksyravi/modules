@@ -1,4 +1,4 @@
 services:
   site_location.current_time:
     class: Drupal\site_location\SiteLocationService
-    arguments: ['@datetime.time', '@date.formatter']
+    arguments: ['@datetime.time', '@date.formatter', '@page_cache_kill_switch']

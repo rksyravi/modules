@@ -34,6 +34,6 @@ repeated curl requests is kept to a minimum.
      call phone numbers or send email.
 
 ## Screenshot of Node Link Report block
-![Sample screenshot of the node link report block]
-(https://www.drupal.org/files/project-images/node-link-report-sample.png "Sample 
+![Sample screenshot of the node link report block](
+https://www.drupal.org/files/project-images/node-link-report-sample.png "Sample 
 of the Node Link Report block")

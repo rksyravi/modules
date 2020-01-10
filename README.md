@@ -35,5 +35,5 @@ repeated curl requests is kept to a minimum.
 
 ## Screenshot of Node Link Report block
 ![Sample screenshot of the node link report block]
-(https://www.drupal.org/files/project-images/node-link-report-sample.png"Sample 
+(https://www.drupal.org/files/project-images/node-link-report-sample.png "Sample 
 of the Node Link Report block")

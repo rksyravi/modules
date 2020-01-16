@@ -1,3 +1,5 @@
+[https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/
+QueryStringParameters.html]
 Links within content can take many forms in WYSIWYG, link fields, free text,
 entity reference fields and many others. Making sure that links are not broken
 in your content can be difficult to achieve. This module provides a block that

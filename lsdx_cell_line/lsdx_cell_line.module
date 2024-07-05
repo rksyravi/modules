@@ -1,0 +1,424 @@
+<?php
+
+/**
+ * @file
+ * Hook implementations for the module.
+ */
+
+use Drupal\Core\Field\FieldConfigInterface;
+use Drupal\Core\Render\BubbleableMetadata;
+use Drupal\Core\Entity\Element\EntityAutocomplete;
+use Drupal\node\NodeInterface;
+use Drupal\Core\Form\FormStateInterface;
+
+/**
+ * Implements hook_theme_suggestions_HOOK_alter().
+ */
+function lsdx_cell_line_theme_suggestions_input_alter(array &$suggestions, array $variables) {
+  $element = $variables['element'];
+  if (!empty($element['#name']) && str_contains($element['#name'], 'cell_line_remove_product')) {
+    $suggestions[] = 'input__cell_line_remove_product';
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function lsdx_cell_line_preprocess_input__cell_line_remove_product(&$variables) {
+  $element = $variables['element'];
+  $variables['cell_line_product_item'] = $element['#cell_line_product_item'] ?: [];
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function lsdx_cell_line_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  if (!empty($form['#webform_id']) && $form['#webform_id'] === 'cell_line_prod_terms_condition') {
+
+    // Calling the Customer Data service to fetch user details.
+    $service = \Drupal::service('lsdx_utility.common_utility_helper');
+    $customerData = $service->getCustomerData();
+    $customerData = $customerData ?? [];
+    $form['#attached']['drupalSettings']['lsdx_cell_line']['customer'] =
+    !empty($customerData) ? $customerData : FALSE;
+    $form['#attached']['drupalSettings']['business_user'] = FALSE;
+    $roles = \Drupal::currentUser()->getRoles();
+    if (count(array_intersect(['revvity_b2b_customer', 'punchout_customer'], $roles))) {
+      $form['#attached']['drupalSettings']['business_user'] = TRUE;
+    }
+
+    $first_page_submit_label = $form['elements']['first_page']['actions_02']['#wizard_next__label'];
+    $form['elements']['first_page']['actions_02']['#wizard_next__label'] = html_entity_decode($first_page_submit_label);
+    $second_page_submit_label = $form['elements']['second_page']['container_01']['actions_01']['#wizard_next__label'];
+    $form['elements']['second_page']['container_01']['actions_01']['#wizard_next__label'] = html_entity_decode($second_page_submit_label);
+    $third_page_submit_label = $form['elements']['third_page']['container']['actions']['#submit__label'];
+    $form['elements']['third_page']['container']['actions']['#submit__label'] = html_entity_decode($third_page_submit_label);
+
+    if (!empty($form_state->get('current_page')) && $form_state->get('current_page') === 'first_page') {
+      $token = \Drupal::token();
+      $listing_heading = $token->replacePlain('[config_page:cell_line_terms_conditions:field_products_list_heading]');
+      $remove = $token->replacePlain('[config_page:cell_line_terms_conditions:field_remove_button]');
+      $show_hide = $token->replacePlain('[config_page:cell_line_terms_conditions:field_show_search_box]');
+      $placeholder = $token->replacePlain('[config_page:cell_line_terms_conditions:field_search_placeholder]');
+      $clear = $token->replacePlain('[config_page:cell_line_terms_conditions:field_clear_button]');
+      $add = $token->replacePlain('[config_page:cell_line_terms_conditions:field_add_button]');
+      $wrapper = 'cell-line-product-listing-wrapper';
+
+      $form['#validate'][] = 'lsdx_cell_line_validate_first_page';
+
+      $form['elements']['first_page']['cell_line_external_wrapper'] = [
+        '#type' => 'container',
+        '#attributes' => [
+          'class' => [
+            'cell-line-external-wrapper',
+          ],
+        ],
+        '#weight' => -10,
+      ];
+
+      $form['elements']['first_page']['cell_line_external_wrapper']['product_listing'] = [
+        '#prefix' => '<div id="' . $wrapper . '" class="hidden">',
+        '#suffix' => '</div>',
+      ];
+
+      // Render cell-line product lists.
+      if (!empty($form_state->get('cell_line_tmp'))) {
+        $products_added = json_decode($form_state->get('cell_line_tmp'), TRUE);
+        if (!empty($products_added)) {
+          $form['elements']['first_page']['cell_line_external_wrapper']['product_listing']['listing'] = [
+            '#type' => 'fieldset',
+            '#title' => str_replace('@nosProducts', count($products_added), $listing_heading),
+            '#prefix' => '<div id="listing-products">',
+            '#suffix' => '</div>',
+          ];
+        }
+        foreach ($products_added as $id => $value) {
+          $form['elements']['first_page']['cell_line_external_wrapper']['product_listing']['listing'][$id]['cell_line_remove_product'] = [
+            '#type' => 'submit',
+            '#value' => $remove,
+            '#name' => 'cell_line_remove_product_' . $id,
+            '#submit' => ['lsdx_cell_line_remove_product'],
+            '#ajax' => [
+              'callback' => 'lsdx_cell_line_ajax_callback',
+              'wrapper' => $wrapper,
+            ],
+            '#attributes' => [
+              'data-item' => $id,
+            ],
+            '#cell_line_product_id' => $id,
+            '#cell_line_product_item' => $value,
+          ];
+        }
+      }
+
+      $form['elements']['first_page']['cell_line_external_wrapper']['product_listing']['products'] = $form['elements']['first_page']['products'];
+      unset($form['elements']['first_page']['products']);
+
+      $form['elements']['first_page']['cell_line_external_wrapper']['show_hide'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'div',
+        '#value' => '+ ' . $show_hide,
+        '#attributes' => [
+          'id' => 'cell-line-search-operator',
+          'class' => [
+            'hidden',
+          ],
+        ],
+      ];
+
+      $form['elements']['first_page']['cell_line_external_wrapper']['box_wrapper'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'div',
+        '#attributes' => [
+          'id' => 'cell-line-search-wrapper',
+        ],
+      ];
+
+      $form['elements']['first_page']['cell_line_external_wrapper']['box_wrapper']['clear'] = [
+        '#type' => 'html_tag',
+        '#tag' => 'span',
+        '#value' => $clear,
+        '#attributes' => [
+          'id' => 'cell-line-search-clear',
+        ],
+      ];
+
+      $form['elements']['first_page']['cell_line_external_wrapper']['box_wrapper']['cell_line_search'] = [
+        '#type' => 'textfield',
+        '#title_display' => 'invisible',
+        '#title' => t('Search product'),
+        '#maxlength'=> 300,
+        '#required' => TRUE,
+        '#default_value' => $form_state->getValue('cell_line_search') ?: '',
+        '#autocomplete_route_name' => 'lsdx_cell_line.autocomplete.search_product',
+        '#attributes' => [
+          'placeholder' => $placeholder,
+        ],
+      ];
+
+      $form['elements']['first_page']['cell_line_external_wrapper']['box_wrapper']['cell_line_add_product'] = [
+        '#type' => 'submit',
+        '#value' => $add,
+        '#validate' => ['lsdx_cell_line_search_validate'],
+        '#submit' => ['lsdx_cell_line_add_product'],
+        '#attributes' => [
+          'class' => [
+            'cv-validate-before-ajax',
+          ],
+        ],
+        '#states' => [
+          'disabled' => [
+            'input[name="cell_line_search"]' => ['value' => ''],
+          ],
+        ],
+        '#ajax' => [
+          'callback' => 'lsdx_cell_line_ajax_callback',
+          'wrapper' => $wrapper,
+        ],
+      ];
+    }
+  }
+}
+
+/**
+ * Implements hook_form_validate() for webform first_page.
+ */
+function lsdx_cell_line_validate_first_page($form, FormStateInterface $form_state) {
+  $form_state->clearErrors();
+  $values = $form_state->getValues();
+  if (isset($values['products']) && empty(json_decode($values['products'], TRUE))) {
+    $form_state->setErrorByName('cell_line_search', t('No product added in the list to order.'));
+  }
+}
+
+/**
+ * Refresh the form with latest rebuild.
+ */
+function lsdx_cell_line_ajax_callback(&$form, FormStateInterface $form_state) {
+  $new_set = [];
+  $product_data = !empty($form_state->get('cell_line_tmp')) ? json_decode($form_state->get('cell_line_tmp'), TRUE) : [];
+  foreach ($product_data as $value) {
+    unset($value['media']);
+    $new_set[] = $value;
+  }
+  $form['elements']['first_page']['cell_line_external_wrapper']['product_listing']['products']['#value'] = json_encode($new_set, JSON_UNESCAPED_UNICODE);
+  return $form['elements']['first_page']['cell_line_external_wrapper']['product_listing'];
+}
+
+/**
+ * Add cell-line product to the lists.
+ */
+function lsdx_cell_line_add_product(&$form, FormStateInterface $form_state) {
+  $product_data = !empty($form_state->get('cell_line_tmp')) ? json_decode($form_state->get('cell_line_tmp'), TRUE) : [];
+  $input = $form_state->getValue('cell_line_search');
+  if (!empty($input)) {
+    $entity_id = EntityAutocomplete::extractEntityIdFromAutocompleteInput($input);
+    if (!array_key_exists($entity_id, $product_data) && is_numeric($entity_id)) {
+      $product_data[$entity_id]['id'] = (int) $entity_id;
+      $node = \Drupal::entityTypeManager()->getStorage('node')->load($entity_id);
+      if ($node instanceof NodeInterface) {
+        $langcode = \Drupal::languageManager()->getCurrentLanguage()->getId();
+        if ($node->hasTranslation($langcode)) {
+          $node = $node->getTranslation($langcode);
+        }
+        $product_data[$entity_id]['name'] = $node->getTitle();
+        $product_data[$entity_id]['part_number'] = '';
+        $product_data[$entity_id]['media'] = '';
+        if (!$node->get('field_part_number')->isEmpty()) {
+          $product_data[$entity_id]['part_number'] = $node->get('field_part_number')->getValue()[0]['value'];
+        }
+
+        if (!$node->get('field_primary_image')->isEmpty()) {
+          $media_references = $node->get('field_primary_image')->referencedEntities();
+          if (!empty($media_references)) {
+            /** @var \Drupal\media\MediaInterface $media */
+            foreach ($media_references as $media) {
+              if (!$media->get('field_media_remote_image_url')->isEmpty()) {
+                $product_data[$entity_id]['media'] = $media->get('field_media_remote_image_url')->getValue()[0];
+                break;
+              }
+            }
+          }
+        }
+      }
+      $form_state->set('cell_line_tmp', json_encode($product_data, JSON_UNESCAPED_UNICODE));
+    }
+  }
+
+  $form_state->setRebuild();
+}
+
+/**
+ * Remove added cell-line product from lists.
+ */
+function lsdx_cell_line_remove_product(array &$form, FormStateInterface $form_state) {
+  $product_id = $form_state->getTriggeringElement()['#cell_line_product_id'] ?: $form_state->getTriggeringElement()['#array_parents'][5];
+  $product_data = !empty($form_state->get('cell_line_tmp')) ? json_decode($form_state->get('cell_line_tmp'), TRUE) : [];
+  if (!empty($product_id) && !empty($product_data)) {
+    unset($product_data[$product_id]);
+    $form_state->set('cell_line_tmp', json_encode($product_data, JSON_UNESCAPED_UNICODE));
+  }
+
+  $form_state->setRebuild();
+}
+
+/**
+ * Validate cell-line search box.
+ */
+function lsdx_cell_line_search_validate(&$form, FormStateInterface $form_state) {
+  $msg = \Drupal::token()->replace('[config_page:cell_line_terms_conditions:field_error_messages]');
+  $error_msg = json_decode($msg, TRUE) ?: [
+    'autocomplete' => 'No results found. Try a different product number.',
+    'empty' => 'Search product field is required.',
+    'duplicate' => 'Products already added.',
+    'access' => 'This product cannot be added, or no access.',
+  ];
+  $input = trim($form_state->getValue('cell_line_search'));
+  $product_data = !empty($form_state->get('cell_line_tmp')) ? json_decode($form_state->get('cell_line_tmp'), TRUE) : [];
+  if (empty($input)) {
+    $form_state->setErrorByName('cell_line_search', $error_msg['empty']);
+  }
+  else {
+    $entity_id = EntityAutocomplete::extractEntityIdFromAutocompleteInput($input);
+    if (empty($entity_id)) {
+      $form_state->setErrorByName('cell_line_search', $error_msg['access']);
+    }
+    else {
+      if (array_key_exists($entity_id, $product_data)) {
+        $form_state->setErrorByName('cell_line_search', $error_msg['duplicate']);
+      }
+      else {
+        $select = \Drupal::entityQuery('node')
+          ->accessCheck(TRUE)
+          ->condition('nid', $entity_id)
+          ->condition('type', 'product_variation')
+          ->execute();
+        if (empty($select)) {
+          $form_state->setErrorByName('cell_line_search', $error_msg['autocomplete']);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_tokens_alter().
+ */
+function lsdx_cell_line_tokens_alter(array &$replacements, array $context, BubbleableMetadata $bubbleable_metadata) {
+  if ($context['type'] === 'config_page') {
+    $context_tokens = array_keys($context['tokens']);
+    $token_key = reset($context_tokens);
+    if (isset($context['tokens'][$token_key]) && empty($replacements[$context['tokens'][$token_key]])) {
+      [$entity_type_id, $key] = explode(':', $token_key);
+      if (!empty($entity_type_id) && in_array($entity_type_id, ['cell_line_terms_conditions', 'cell_line_global_settings'])) {
+        $fields = \Drupal::service('entity_field.manager')->getFieldDefinitions('config_pages', $entity_type_id);
+        /** @var \Drupal\Core\Field\FieldConfigInterface $field */
+        $field = $fields[$key] ?: '';
+        if ($field instanceof FieldConfigInterface && !$field->isRequired()) {
+          $replacements[$context['tokens'][$token_key]] = '';
+        }
+        if ($field instanceof FieldConfigInterface && $field->isRequired()) {
+          $replacements[$context['tokens'][$token_key]] = $field->getDefaultValueLiteral()[0]['value'];
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function lsdx_cell_line_form_config_pages_cell_line_terms_conditions_form_alter(&$form, FormStateInterface $form_state, $form_id) {
+  $form['#validate'][] = 'lsdx_cell_line_terms_conditions_form_validate';
+}
+
+/**
+ * Implements hook_form_validate().
+ */
+function lsdx_cell_line_terms_conditions_form_validate(&$form, FormStateInterface $form_state) {
+  $values = $form_state->getValues();
+  $err_msg = $values['field_error_messages'][0]['value'];
+  if (empty($err_msg)) {
+    $form_state->setErrorByName('field_error_messages', t('Error messages field is required.'));
+  }
+  elseif (empty(json_decode($err_msg, TRUE))) {
+    $form_state->setErrorByName('field_error_messages', t('Invalid structure in error messages field.'));
+  }
+  else {
+    $msg = json_decode($err_msg, TRUE);
+    if (array_diff(['autocomplete', 'empty', 'duplicate', 'access'], array_keys($msg))) {
+      $form_state->setErrorByName('field_error_messages', t('Error messages field not matching the requirement. Please follow the description for reference.'));
+    }
+  }
+}
+
+/**
+ * Implements template_preprocess_webform()
+ */
+function lsdx_cell_line_preprocess_webform(array &$variables) {
+  $element = $variables['element'];
+  if (!empty($element['#webform_id']) && $element['#webform_id'] === 'cell_line_prod_terms_condition') {
+    $token = \Drupal::token();
+    $variables['heading'] = $token->replace('[config_page:cell_line_terms_conditions:field_heading_1]');
+    $variables['subheading'] = $token->replace('[config_page:cell_line_terms_conditions:field_subheading_1]');
+    $variables['is_confirmation_page'] = (bool) isset($element['confirmation']);
+  }
+}
+
+/**
+ * Implements template_preprocess_webform_confirmation()
+ */
+function lsdx_cell_line_preprocess_webform_confirmation(array &$variables) {
+  $webform = $variables['webform'];
+  $webform_submission = $variables['webform_submission'];
+  $data = $webform_submission->getData();
+  if ($webform->id() === 'cell_line_prod_terms_condition') {
+    $token = \Drupal::token();
+    $products = json_decode($data['products'], TRUE) ?: [];
+    $date_replace = $token->replace('[config_page:cell_line_terms_conditions:field_submission_date_info_text]');
+    if (!empty($date_replace)) {
+      $complete = \Drupal::service('date.formatter')->format($webform_submission->getCompletedTime(), 'custom', 'm/d/Y');
+      $date_info = str_replace('@submissionDate', $complete, $date_replace);
+    }
+    $heading = $token->replace('[config_page:cell_line_terms_conditions:field_heading_2]');
+    if (!empty($heading)) {
+      $count = count($products);
+      if ($count < 10) {
+        $numbers = [t('Zero'), t('One'), t('Two'), t('Three'), t('Four'), t('Five'), t('Six'), t('Seven'), t('Eight'), t('Nine')];
+        $count = $numbers[$count];
+      }
+      $heading = str_replace('@nosProducts', $count, $heading);
+    }
+
+    $subheading = $token->replacePlain('[config_page:cell_line_terms_conditions:field_subheading_2]');
+    if (!empty($subheading)) {
+      $subheading = str_replace('@email', $data['email_address'], $subheading);
+    }
+
+    $variables['heading'] = $heading;
+    $variables['subheading'] = $subheading;
+    $variables['date_info'] = !empty($date_info) ? $date_info : '';
+    $variables['download_txt'] = $token->replace('[config_page:cell_line_terms_conditions:field_download_terms_conditions]');
+    $variables['tnc_file'] = $token->replace('[config_page:cell_line_global_settings:field_terms_conditions_upload]');
+    $variables['product_list'] = $products;
+
+    // Data Layer.
+    $cid = 'cell_line.webform_submission_' . $webform_submission->id();
+    $cell_line_submission_value = \Drupal::cache()->get($cid);
+    if (!empty($cell_line_submission_value->data)) {
+      $data_layer = $cell_line_submission_value->data;
+      $variables['#attached']['drupalSettings']['cell_line_data_layer_submit'] = $data_layer;
+      $variables['#attached']['library'][] = 'lsdx_custom_datalayer/datalayer_request_forms';
+      \Drupal::service('cache_tags.invalidator')->invalidateTags([$cid]);
+    }
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function lsdx_cell_line_preprocess_form_element__checkbox__accept_tnc(&$variables) {
+  $token = \Drupal::token();
+  $variables['tnc_heading'] = $token->replace('[config_page:cell_line_terms_conditions:field_terms_conditions_heading]');
+  $variables['tnc_file'] = $token->replace('[config_page:cell_line_global_settings:field_terms_conditions_upload]');
+}

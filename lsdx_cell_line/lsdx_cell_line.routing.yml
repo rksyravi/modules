@@ -1,0 +1,9 @@
+lsdx_cell_line.autocomplete.search_product:
+  path: '/cell-line/search-product/autocomplete'
+  defaults:
+    _controller: '\Drupal\lsdx_cell_line\Controller\CellLineController::searchProduct'
+    _title: 'Autocomplete search product'
+  methods: [GET]
+  requirements:
+    _access: 'TRUE'
+    _format: json

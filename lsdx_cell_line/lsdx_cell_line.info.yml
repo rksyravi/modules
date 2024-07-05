@@ -1,0 +1,7 @@
+name: LSDX Cell Line Terms & Conditions
+type: module
+description: 'This module will handle all things related to Cell-line.'
+core_version_requirement: ^9 || ^10
+package: Custom
+dependencies:
+  - drupal:node

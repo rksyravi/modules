@@ -1,0 +1,7 @@
+services:
+# Twig extension.
+
+  lsdx_cell_line.twig_extension:
+    class: Drupal\lsdx_cell_line\Twig\CellLineTwigExtension
+    tags:
+      - { name: twig.extension }
